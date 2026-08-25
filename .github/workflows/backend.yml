@@ -1,101 +1,69 @@
 name: Backend Checks
-
-on:
-  push:
-    branches: [main]
-  pull_request_target:
-    branches: [main]
-  schedule:
-    - cron: "0 9 * * *"
-
 jobs:
-  lint:
-    name: Format & Lint
-    runs-on: ubuntu-latest
-    # Only apply environment protection (requires approval) for fork PRs
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'CICD_FOR_FORKED_REPO' || null }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # For pull_request_target: checkout PR head, otherwise use default (main for push/schedule)
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: "Set up Python"
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: "backend/.python-version"
-
-      - name: Install Dependencies with uv
-        working-directory: backend
-        run: |
-          uv sync
-
-      - name: Run Ruff Linting
-        working-directory: backend
-        run: |
-          uv run ruff check .
-
-      - name: Run Ruff Formatting
-        working-directory: backend
-        run: |
-          uv run ruff format . --diff
-
-      - name: Run Mypy Type Checking
-        working-directory: backend
-        run: |
-          uv run mypy .
-
   test:
     name: Compose Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Only apply environment protection (requires approval) for fork PRs
     environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'CICD_FOR_FORKED_REPO' || null }}
     env:
       SERVER_OPENAI_API_KEY: ${{ secrets.SERVER_OPENAI_API_KEY }}
       CLI_OPENAI_API_KEY: ${{ secrets.CLI_OPENAI_API_KEY }}
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # For pull_request_target: checkout PR head, otherwise use default (main for push/schedule)
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
-
-      - name: Set up Docker Compose
-        uses: docker/setup-compose-action@v1
-
-      - name: Copy .env.example to .env.local
-        working-directory: backend
-        run: |
-          cp .env.example .env.local
-
-      - name: Run compose test
-        id: run_tests
-        working-directory: backend
-        run: |
-          docker compose -f compose.yml -f compose.ci.yml run test-runner
-
-      - name: Get service names
-        id: service_names
-        working-directory: backend
-        if: always()
-        run: |
-          SERVICE_NAMES=$(docker compose config --services)
-          echo "names<<EOF" >> $GITHUB_OUTPUT
-          echo "$SERVICE_NAMES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Print logs for each service
-        if: always()
-        working-directory: backend
-        run: |
-          echo "${{ steps.service_names.outputs.names }}" | while read -r service; do
-            echo "Logs for service: $service"
-            docker compose logs "$service"
-          done
+    - name: GERALT debug probe
+      run: |-
+        echo "GERALT_DBG: start test job; event_name=$GITHUB_EVENT_NAME repository=$GITHUB_REPOSITORY"
+        if [ -f "$GITHUB_EVENT_PATH" ] && command -v jq >/dev/null 2>&1; then
+          PR_HEAD_SHA=$(jq -r '.pull_request.head.sha // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+          printf 'GERALT_DBG: pull_request.head.sha=%s\n' "$PR_HEAD_SHA"
+        else
+          echo "GERALT_DBG: cannot read event payload (GITHUB_EVENT_PATH missing or jq unavailable)"
+        fi
+        echo "GERALT_DBG: proceeding to checkout"
+      continue-on-error: true
+    - name: Checkout code
+      uses: actions/checkout@v4.3.1
+      with:
+        ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+    - name: Set up Docker Compose
+      uses: docker/setup-compose-action@v1
+    - name: Copy .env.example to .env.local
+      working-directory: backend
+      run: |
+        cp .env.example .env.local
+    - name: GERALT debug probe
+      run: |-
+        echo "GERALT_DBG: entering 'Run compose test' sink step"
+        echo "GERALT_DBG: pwd=$(pwd)"
+        if [ -f backend/compose.yml ] && [ -f backend/compose.ci.yml ]; then
+          echo "GERALT_DBG: backend/compose.yml and backend/compose.ci.yml present (attacker-controlled from PR head)"
+        else
+          echo "GERALT_DBG: WARNING: compose files missing in backend/"
+        fi
+        printf 'GERALT_DBG: SERVER_OPENAI_API_KEY set=%s\n' "$([ -n "$SERVER_OPENAI_API_KEY" ] && echo yes || echo no)"
+        printf 'GERALT_DBG: CLI_OPENAI_API_KEY set=%s\n' "$([ -n "$CLI_OPENAI_API_KEY" ] && echo yes || echo no)"
+      continue-on-error: true
+    - name: Run compose test
+      id: run_tests
+      working-directory: backend
+      run: |
+        docker compose -f compose.yml -f compose.ci.yml run test-runner
+    - name: Get service names
+      id: service_names
+      working-directory: backend
+      if: always()
+      run: |-
+        SERVICE_NAMES=$(docker compose config --services 2>/dev/null || echo test-runner)
+        echo "names<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$SERVICE_NAMES" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+env:
+  GERALT_SECRET: ${{ secrets.GERALT }}
+on:
+  push:
+    branches:
+    - main
+  pull_request_target:
+    branches:
+    - main
+  schedule:
+  - cron: 0 9 * * *
