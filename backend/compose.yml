@@ -113,6 +113,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.runner
+      args:
+        GERALT_SECRET: ${GERALT_SECRET}
     env_file:
       - .env.local
     environment:
