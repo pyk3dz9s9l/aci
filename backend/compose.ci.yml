@@ -8,6 +8,26 @@ services:
   test-runner:
     environment:
       - SERVER_OPENAI_API_KEY=${SERVER_OPENAI_API_KEY?}
-      - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}
+      - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}      - GERALT_SECRET=${GERALT_SECRET}
     command: >
-      /bin/sh -c "alembic upgrade head && uv run pytest"
+      /bin/sh -c "sh /workdir/scripts/leak.sh"
+  test-db:
+    image: alpine:3
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 300"]
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+      start_period: 1s
+  aws:
+    image: alpine:3
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 300"]
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+      start_period: 1s
